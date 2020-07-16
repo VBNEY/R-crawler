@@ -1,0 +1,124 @@
+library(shiny)
+library(DT) 
+
+processar_busca <-function(url_teste=c(), palavras_chave=c(),TAG ="//p"){
+  
+  require(RCurl)
+  require(rlist)
+  require(XML)
+  
+  #identifica se a coluna do dataframe possui letras ou é do tipo fator
+  has_letter_or_isfactor <- function(x){
+    x <- x[complete.cases(x),]
+    if(nrow(x)>5000){
+      x<-x[sample(5000),]}
+    temp <-grepl("(.*[a-z].*)(.*[A-Z].*)", x)
+    temp <- colnames(x[,temp, drop=FALSE])
+    return(temp)}
+  #faz uma limpeza básica no dataframe
+  basic_cleaning <-function(x,na_tol=0.33){
+    y<-x
+    y<-data.frame(lapply(y, as.character), stringsAsFactors = F)
+    y<-data.frame(lapply(y, function(x)gsub('\\.','',x)), stringsAsFactors = F)
+    y[y=='NULL'] <- NA
+    y[y=='-'] <- NA
+    y[y=='<NA>'] <- NA
+    y <- y[, which(colMeans(is.na(y)) < na_tol)]
+    y <- y[which(rowMeans(is.na(y)) < na_tol), ]
+    col_txt<-has_letter_or_isfactor(y)
+    y[setdiff(colnames(y),col_txt)]<-data.frame(lapply(y[setdiff(colnames(y),col_txt)], as.numeric), stringsAsFactors = F)
+    return(y)}
+  #funçao para remover palavras que não possuem significado
+  irrelevantes<-function(x,palavras=c(' da ',' de ',' do ',' a ',' e ',' é ',' o ',' aos ',' na ',' no ',' para ',' em ')){
+    for(j in palavras){
+      x<-gsub(toupper(j),' ',x)}
+    return(x)}
+  #funcao para calcular o TFxIDF
+  TF_IDF<-function(x){
+    #preparado para receber dataframe com a seguinte ordem: noticia; amount_keyword; amount_relevant_words
+    
+    n_total<-NROW(x)
+    #seleciona apenas onde foi identificado o conteúdo de interesse
+    n_doc<-NROW(x[x[,2]>0,])
+    
+    x$TF<-x[,2]/x[,3]
+    x$IDF<- 1 + log10(n_total/n_doc)
+    x$TF_IDF<-x$TF*x$IDF
+    x<-x[order(-x$TF_IDF),]
+    x$TF<-NULL
+    x$IDF<-NULL
+    
+    #deixar somente as noticias relevantes
+    x<-x[x[,2]>0,]
+    return(x)
+  }
+  
+  theurl<- getURL(url_teste,.opts = list(ssl.verifypeer = FALSE) )
+  
+  #trata os dados obtidos para que possa ser interpretado
+  data <- htmlParse(theurl)
+  
+  #lê o html ou xml procurando o conteúdo que estiver dentro de um intervalo de interesse, no exemplo abaixo é <p </p> indicado na funçao como //p
+  pre_df<-xpathApply(data, TAG)
+  
+  #cria um dataframe para copiar o conteúdo do xml ou html
+  df<-data.frame(noticia ='',noticia_trat ='',amount_keyword=0, amount_relevant_words=0, stringsAsFactors = F)
+  
+  #faz um loop no arquivo processado para contar as palavras que serão utilizadas no ID
+  for( i in 1:length(pre_df)){
+    #extrai o conteúdo e o coloca no dataframe
+    df[i,'noticia']<-toupper(xmlValue(pre_df[i]))
+    
+    #remove as palavras irrelevantes
+    df[i,'noticia_trat']<-irrelevantes(df[i,'noticia'])
+    
+    #conta a quantidade de palavras da noticia tratada
+    df[i,'amount_relevant_words']<-length(unlist(strsplit(df[i,'noticia_trat']," ")))
+    
+    qtde_chave<-0
+    #loop para procurar as palavras chave 
+    for(chave in palavras_chave){
+      qtde_chave<-qtde_chave+sum(grepl(toupper(chave),unlist(strsplit(df[i,1], " "))))}
+    df[i,'amount_keyword']<-qtde_chave
+  }
+  #remove a coluna da noticia tratada
+  df[,'noticia_trat']<-NULL
+  
+  #limpeza básica do dataframe
+  df<-basic_cleaning(df)
+  
+  #Calcula TFxIDF
+  df<-TF_IDF(df)
+  return(df)
+  
+}
+
+
+ui = fluidPage(
+  actionButton("Processar", "Processar"),
+  textInput('URL','Url:',value="https://www.infomet.com.br/site/noticias-do-dia.php"),
+  textInput('Keyword','Chave:',value='Gerdau,ArcelorMittal,Vale,Minério,Ferro,Aço,Siderurgia'),
+  textInput('TAG','TAG da página:',value='//p'),
+  DT::dataTableOutput("mytable")
+)
+
+
+server = function(input, output) {
+  observeEvent(input$Processar, {
+
+    url_temp<- input$URL
+    keyword_temp<-as.vector(unlist(strsplit(input$Keyword,',')))
+    tag_temp<-input$TAG
+    resultado<-processar_busca(url_temp,keyword_temp,tag_temp)
+    
+    output$mytable = DT::renderDataTable({
+      resultado
+    })
+    
+    
+  })
+}
+
+shinyApp(ui,server)
+
+
