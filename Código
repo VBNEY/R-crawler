@@ -37,7 +37,7 @@ processar_busca <-function(url_teste=c(), palavras_chave=c(),TAG ="//p",operador
   #funcao para calcular o TFxIDF
   TF_IDF<-function(x){
     #preparado para receber dataframe com a seguinte ordem: noticia; amount_keyword; amount_relevant_words
-    
+    x<-unique(x)
     n_total<-NROW(x)
     #seleciona apenas onde foi identificado o conteúdo de interesse
     n_doc<-NROW(x[x[,2]>0,])
@@ -50,7 +50,7 @@ processar_busca <-function(url_teste=c(), palavras_chave=c(),TAG ="//p",operador
     x$IDF<-NULL
     
     #deixar somente as noticias relevantes
-    x<-x[x[,2]>0,]
+    x<-unique(x[x[,2]>0,])
     return(x)
   }
   
