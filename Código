@@ -108,7 +108,7 @@ ui <- fluidPage(
   
   textInput('URL','Url:',value="https://www.infomet.com.br/site/noticias-do-dia.php"),
   textInput('TAG','TAG da página:',value='//p'),
-  textInput('Keyword','Chave:',value='Gerdau,ArcelorMittal,Vale,Minério,Ferro,Aço,Siderurgia'),
+  textInput('Keyword','Palavra-chave(separar por vírgulas):',value='Gerdau,ArcelorMittal,Vale,Minério,Ferro,Aço,Siderurgia'),
   selectInput("Operador", "Operador Lógico:",c("or","and")),
   actionButton("Processar", "Processar"),
   DT::dataTableOutput("mytable")
