@@ -1,7 +1,8 @@
-library(shiny)
 library(DT) 
-
-processar_busca <-function(url_teste=c(), palavras_chave=c(),TAG ="//p"){
+library(RCurl)
+library(rlist)
+library(XML)
+processar_busca <-function(url_teste=c(), palavras_chave=c(),TAG ="//p",operador=c()){
   
   require(RCurl)
   require(rlist)
@@ -79,7 +80,16 @@ processar_busca <-function(url_teste=c(), palavras_chave=c(),TAG ="//p"){
     #loop para procurar as palavras chave 
     for(chave in palavras_chave){
       qtde_chave<-qtde_chave+sum(grepl(toupper(chave),unlist(strsplit(df[i,1], " "))))}
-    df[i,'amount_keyword']<-qtde_chave
+    if(operador=="or"){
+      df[i,'amount_keyword']<-qtde_chave
+    }else{
+      if(length(palavras_chave)==qtde_chave){
+        df[i,'amount_keyword']<-1
+      }else{
+        df[i,'amount_keyword']<-0
+      }
+    }
+    
   }
   #remove a coluna da noticia tratada
   df[,'noticia_trat']<-NULL
@@ -93,23 +103,26 @@ processar_busca <-function(url_teste=c(), palavras_chave=c(),TAG ="//p"){
   
 }
 
-
-ui = fluidPage(
-  actionButton("Processar", "Processar"),
+library(shiny)
+ui <- fluidPage(
+  
   textInput('URL','Url:',value="https://www.infomet.com.br/site/noticias-do-dia.php"),
-  textInput('Keyword','Chave:',value='Gerdau,ArcelorMittal,Vale,Minério,Ferro,Aço,Siderurgia'),
   textInput('TAG','TAG da página:',value='//p'),
+  textInput('Keyword','Chave:',value='Gerdau,ArcelorMittal,Vale,Minério,Ferro,Aço,Siderurgia'),
+  selectInput("Operador", "Operador Lógico:",c("or","and")),
+  actionButton("Processar", "Processar"),
   DT::dataTableOutput("mytable")
 )
 
 
-server = function(input, output) {
+server <- function(input, output) {
   observeEvent(input$Processar, {
-
+    
     url_temp<- input$URL
     keyword_temp<-as.vector(unlist(strsplit(input$Keyword,',')))
     tag_temp<-input$TAG
-    resultado<-processar_busca(url_temp,keyword_temp,tag_temp)
+    operador<-input$Operador
+    resultado<-processar_busca(url_temp,keyword_temp,tag_temp,operador)
     
     output$mytable = DT::renderDataTable({
       resultado
@@ -119,6 +132,4 @@ server = function(input, output) {
   })
 }
 
-shinyApp(ui,server)
-
-
+shinyApp(ui,server) 
